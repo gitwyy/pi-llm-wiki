@@ -49,6 +49,7 @@ interface Ui {
       keybindings: unknown,
       done: (result?: unknown) => void,
     ) => unknown,
+    options?: { overlay?: boolean; overlayOptions?: Record<string, unknown> },
   ): Promise<unknown>;
 }
 
@@ -363,6 +364,12 @@ function scopeTitle(scope: SettingScope): string {
   return `\u{1F9E0} LLM Wiki Settings \u2014 ${scope === "global" ? "Global" : "Project"} (Esc to close)`;
 }
 
+// ponytail: overlay options matching pi-blackhole's config modal style
+const OVERLAY_OPTS = {
+  overlay: true,
+  overlayOptions: { anchor: "center", width: "92%", maxHeight: "95%" },
+};
+
 async function showSettingsTui(ui: Ui, cwd: string, scope: SettingScope): Promise<void> {
   if (typeof ui.custom !== "function") {
     ui.notify(
@@ -445,7 +452,7 @@ async function showSettingsTui(ui: Ui, cwd: string, scope: SettingScope): Promis
     );
     screenRef = new SettingsScreen(scopeTitle(writeScope), list);
     return screenRef;
-  });
+  }, OVERLAY_OPTS);
 }
 
 /**

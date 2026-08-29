@@ -84,6 +84,12 @@ export class DashboardScreen extends Container {
   }
 }
 
+// ponytail: overlay options matching pi-blackhole's config modal style
+const OVERLAY_OPTS = {
+  overlay: true,
+  overlayOptions: { anchor: "center", width: "92%", maxHeight: "95%" } as const,
+};
+
 /**
  * Register the /wiki-dashboard command.
  */
@@ -100,7 +106,7 @@ export function registerWikiDashboardCommand(pi: ExtensionAPI, runtime: Runtime)
       const stats = await collectDashboardStats(ctx.cwd);
       await ctx.ui.custom((_tui, _theme, _keybindings, close) => {
         return new DashboardScreen(renderStatsLines(stats), close);
-      });
+      }, OVERLAY_OPTS);
     },
   });
 }

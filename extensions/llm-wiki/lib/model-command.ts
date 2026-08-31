@@ -96,11 +96,6 @@ function buildPickerItems(
 /** Editor-dock picker; `ui.custom` without overlay replaces the input slot like `/model`. */
 class ModelPickerScreen extends Container {
   private list: SelectList;
-  private filterText: Text;
-  private allItems: SelectItem[];
-  private onSelectCb: (item: SelectItem) => void;
-  private theme: Theme;
-  private filter = "";
   private doneFn: (result?: string) => void;
   private closed = false;
 
@@ -113,12 +108,7 @@ class ModelPickerScreen extends Container {
   ) {
     super();
     this.doneFn = done;
-    this.theme = theme;
-    this.allItems = items;
-    this.onSelectCb = (item: SelectItem) => this.finish(item.value);
-    this.filterText = new Text("\u{1f50d} (type to filter)", 0, 0);
     this.addChild(new Text(title, 0, 0));
-    this.addChild(this.filterText);
     this.addChild(new Spacer(1));
     this.list = new SelectList(
       items,
@@ -132,37 +122,12 @@ class ModelPickerScreen extends Container {
   }
 
   handleInput(data: string): void {
+    // matchesKey covers kitty CSI-u Esc; SelectList cancel is the fallback.
     if (matchesKey(data, "escape")) {
-      if (this.filter.length > 0) {
-        this.applyFilter("");
-      } else {
-        this.finish(undefined);
-      }
-      return;
-    }
-    if (data.length === 1 && data >= " ") {
-      this.applyFilter(this.filter + data);
-      return;
-    }
-    if (data === "backspace" || matchesKey(data, "backspace")) {
-      if (this.filter.length > 0) this.applyFilter(this.filter.slice(0, -1));
+      this.finish(undefined);
       return;
     }
     this.list.handleInput(data);
-  }
-
-  private applyFilter(value: string): void {
-    this.filter = value;
-    this.filterText.setText(value.length > 0 ? `\u{1f50d} ${value}` : `\u{1f50d} (type to filter)`);
-    const filtered = value.length > 0
-      ? this.allItems.filter((it) => it.value.toLowerCase().startsWith(value.toLowerCase()))
-      : this.allItems;
-    this.removeChild(this.list);
-    this.list = new SelectList(filtered, 15, buildSelectTheme(this.theme));
-    this.list.setSelectedIndex(0);
-    this.list.onSelect = this.onSelectCb;
-    this.list.onCancel = () => this.finish(undefined);
-    this.addChild(this.list);
   }
 
   private finish(result?: string): void {

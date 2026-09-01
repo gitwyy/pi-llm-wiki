@@ -73,16 +73,24 @@
     "docs:build": "node scripts/sync-docs.js && astro build"
   },
   "pi": {
-    "extensions": ["./extensions"],
-    "skills": ["./skills"],
-    "prompts": ["./prompts"],
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ],
     "image": "https://raw.githubusercontent.com/zosmaai/pi-llm-wiki/main/assets/screenshot.png",
     "mcpservers": {
       "llm-wiki": "node ./dist/mcp/index.js"
     }
   },
   "omp": {
-    "extensions": ["./extensions/llm-wiki/index.ts"]
+    "extensions": [
+      "./extensions/llm-wiki/index.ts"
+    ]
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
@@ -103,7 +111,7 @@
   },
   "devDependencies": {
     "@astrojs/starlight": "^0.41.10",
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.5.11",
     "@mariozechner/pi-agent-core": "^0.73.1",
     "@mariozechner/pi-ai": "^0.73.1",
     "@mariozechner/pi-coding-agent": "^0.70.2",

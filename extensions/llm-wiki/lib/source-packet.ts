@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { copyFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { createKnowledgeDocument, serializeKnowledgeDocument } from "./knowledge-document.js";
 import { appendEvent } from "./metadata.js";
 import {
@@ -111,7 +111,7 @@ function urlCaptureSource(pi: ExecApi, url: string, signal?: AbortSignal): Captu
 }
 
 function fileCaptureSource(pi: ExecApi, filePath: string, signal?: AbortSignal): CaptureSource {
-  const fileName = filePath.split("/").pop() || "unknown";
+  const fileName = basename(filePath) || "unknown";
   const extractor = fileExtractorFor(filePath);
   const content = extractor.shouldReadText ? readText(filePath) : "";
 

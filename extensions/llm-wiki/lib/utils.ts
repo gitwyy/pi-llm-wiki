@@ -276,6 +276,7 @@ export function readJson<T>(path: string, defaultValue: T): T {
 
 /** Write JSON file atomically. */
 export function writeJson(path: string, data: unknown): void {
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, "utf-8");
 }
 

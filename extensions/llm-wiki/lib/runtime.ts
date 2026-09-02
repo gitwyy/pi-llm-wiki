@@ -1,5 +1,8 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { loadTaskConfig, noticesEnabled, TASK_DEFAULTS, type TaskConfig } from "./task-config.js";
+import { getVaultPaths } from "./utils.js";
 
 /**
  * Background-task runtime for the LLM Wiki (issue #64, part of #63).
@@ -66,7 +69,10 @@ export class Runtime {
   /** Whether we've already surfaced a model-resolution failure (avoid spam). */
   resolveFailureNotified = false;
 
+  private cwd: string | undefined;
+
   ensureConfig(cwd: string): void {
+    this.cwd = cwd;
     this.config = loadTaskConfig(cwd);
   }
 
@@ -154,7 +160,16 @@ export class Runtime {
    */
   launchTask(ctx: LaunchCtx, label: string, work: () => Promise<void>): Promise<void> {
     const existing = this.inFlight.get(label);
-    if (existing) return existing;
+    if (existing) {
+      // Duplicate launch: make the drop visible instead of a silent no-op.
+      try {
+        if (ctx.hasUI && ctx.ui)
+          ctx.ui.notify(`LLM Wiki: ${label} 已在运行，跳过重复任务`, "info");
+      } catch {
+        // stale ctx must not propagate
+      }
+      return existing;
+    }
 
     // Capture ctx properties synchronously — after `await work()` the extension
     // ctx may be stale (e.g. after newSession/fork/switchSession/reload), and
@@ -170,7 +185,11 @@ export class Runtime {
         await work();
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (hasUI && ui) ui.notify(`LLM Wiki: ${label} failed: ${msg}`, "warning");
+        try {
+          if (hasUI && ui) ui.notify(`LLM Wiki: ${label} failed: ${msg}`, "warning");
+        } catch {
+          console.warn(`[llm-wiki] ${label} failed: ${msg} (notify unavailable)`);
+        }
       } finally {
         this.inFlightLabels.delete(label);
         if (this.inFlight.get(label) === promise) this.inFlight.delete(label);
@@ -190,16 +209,36 @@ export class Runtime {
    * interrupts or triggers a turn. Never throws — reporting must not crash the
    * background task that called it.
    */
-  report(summary: string, opts?: { display?: boolean }): void {
-    if (!this.pi || !summary) return;
+  report(summary: string, opts?: { display?: boolean; ui?: { notify: Notify } }): void {
+    if (!summary) return;
     const display = opts?.display ?? noticesEnabled(this.config);
+    // Durable fallback: persist every report so a lost nextTurn delivery is
+    // still recoverable instead of vanishing without a trace.
+    try {
+      const paths = getVaultPaths(this.cwd ?? process.cwd());
+      mkdirSync(paths.meta, { recursive: true });
+      appendFileSync(
+        join(paths.meta, "background-reports.md"),
+        `## ${new Date().toISOString()}\n\n${summary}\n\n`,
+        "utf8",
+      );
+    } catch (err) {
+      console.warn("[llm-wiki] report persistence failed:", err);
+    }
+    if (!this.pi) return;
     try {
       this.pi.sendMessage(
         { customType: "wiki-action-report", content: summary, display },
         { deliverAs: "nextTurn" },
       );
-    } catch {
-      // Reporting is best-effort; a stale/torn-down session must not propagate.
+    } catch (err) {
+      // Reporting is best-effort; the persisted copy above is the fallback.
+      console.warn("[llm-wiki] report delivery failed:", err);
+      try {
+        opts?.ui?.notify("LLM Wiki: 后台报告已写入 meta/background-reports.md", "info");
+      } catch {
+        // best-effort
+      }
     }
   }
 
@@ -220,12 +259,15 @@ export class Runtime {
       const ui = ctx.ui;
       const summary = await work();
       if (summary) {
-        // Instant completion feedback: the nextTurn report below is queued for
-        // the next user prompt, so without a toast a background task looks
-        // stuck. Mirrors the failure notification in launchTask and the
-        // success toast already used by wiki_ingest.
-        if (hasUI && ui) ui.notify(summary.split("\n")[0].replace(/\*\*/g, ""), "info");
-        this.report(summary);
+        // Primary channel first: a stale-UI notify must never skip the report.
+        this.report(summary, { ui });
+        // Instant completion feedback (best-effort toast — a stale UI handle
+        // must not throw and take down the task).
+        try {
+          if (hasUI && ui) ui.notify(summary.split("\n")[0].replace(/\*\*/g, ""), "info");
+        } catch {
+          // best-effort
+        }
       }
     });
   }

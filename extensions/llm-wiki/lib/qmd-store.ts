@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { createStore, type HybridQueryResult, type QMDStore, type SearchResult } from "@tobilu/qmd";
+import type { HybridQueryResult, QMDStore, SearchResult } from "@tobilu/qmd";
 
 /**
  * Package-private normalized adapter over the pinned @tobilu/qmd SDK.
@@ -7,6 +7,12 @@ import { createStore, type HybridQueryResult, type QMDStore, type SearchResult }
  * This is the ONLY production module allowed to import @tobilu/qmd. It hides
  * SDK-specific types, collection config, model identity, and close behavior so
  * the rest of the extension never touches QMD internals or tables directly.
+ *
+ * youke fork: `@tobilu/qmd` is an optionalDependency (its native subtree —
+ * better-sqlite3 via prebuild-install — needs GitHub/VS at install time, which
+ * team machines lack). The value import is therefore lazy inside
+ * openQmdIndexStore() so the module — and the whole extension — still loads
+ * when the package was skipped at install time.
  */
 
 export const QMD_PACKAGE_VERSION = "2.5.3";
@@ -143,6 +149,17 @@ export async function openQmdIndexStore(input: {
   dbPath: string;
   documentsPath: string;
 }): Promise<QmdIndexStore> {
+  // Lazy value import: @tobilu/qmd is optional (native subtree may have been
+  // skipped at install time). Fail with an actionable message only when a QMD
+  // operation is actually attempted.
+  const { createStore } = await import("@tobilu/qmd").catch((err: unknown) => {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `QMD index unavailable: optional dependency @tobilu/qmd could not be loaded ` +
+        `(its native better-sqlite3 subtree needs prebuilt binaries at install time). ` +
+        `Core wiki features are unaffected. Detail: ${detail}`,
+    );
+  });
   const store: QMDStore = await createStore({
     dbPath: input.dbPath,
     config: {

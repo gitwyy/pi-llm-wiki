@@ -1,7 +1,7 @@
 {
   "name": "@youke/pi-llm-wiki",
-  "version": "0.12.2-youke.1",
-  "description": "Self-maintaining LLM Wiki for Pi \u2014 Karpathy-pattern knowledge base with immutable source capture, automated ingestion, search, linting, and Obsidian-compatible vault. auto-updating personal & company wiki.",
+  "version": "0.12.2-youke.2",
+  "description": "Self-maintaining LLM Wiki for Pi — Karpathy-pattern knowledge base with immutable source capture, automated ingestion, search, linting, and Obsidian-compatible vault. auto-updating personal & company wiki.",
   "keywords": [
     "pi",
     "pi-package",
@@ -115,7 +115,6 @@
     "@cfworker/json-schema": "^4.1.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@modelcontextprotocol/server": "^2.0.0",
-    "@tobilu/qmd": "2.5.3",
     "mdast-util-from-markdown": "^2.0.3",
     "node-html-markdown": "^2.0.0",
     "typebox": "^1.1.34",
@@ -135,5 +134,8 @@
     "astro": "^7.2.9",
     "typescript": "^7.0.2",
     "vitest": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@tobilu/qmd": "2.5.3"
   }
 }

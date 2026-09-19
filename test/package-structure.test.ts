@@ -17,7 +17,7 @@ function readProductionFiles(directory: string): string[] {
 describe("package structure", () => {
   it("should have a valid package.json with pi manifest", () => {
     const pkg = JSON.parse(readFile(join(rootDir, "package.json")));
-    expect(pkg.name).toBe("@zosmaai/pi-llm-wiki");
+    expect(pkg.name).toBe("@youke/pi-llm-wiki"); // youke fork rename
     expect(pkg.keywords).toContain("pi-package");
     expect(pkg.pi.extensions).toContain("./extensions");
     expect(pkg.pi.skills).toContain("./skills");
@@ -33,12 +33,42 @@ describe("package structure", () => {
     expect(pkg.dependencies.typebox).toBeTruthy();
 
     expect(pkg.engines.node).toBe(">=22.0.0");
-    expect(pkg.dependencies["@tobilu/qmd"]).toBe("2.5.3");
+    // youke fork: qmd is OPTIONAL — its native subtree (better-sqlite3 via
+    // prebuild-install) needs GitHub/VS at install time, which team machines
+    // lack; optionalDependencies lets npm skip the subtree without failing.
+    expect(pkg.dependencies["@tobilu/qmd"]).toBeUndefined();
+    expect(pkg.optionalDependencies["@tobilu/qmd"]).toBe("2.5.3");
     expect(pkg.pnpm.onlyBuiltDependencies).toEqual([
       "better-sqlite3",
       "node-llama-cpp",
       "sqlite-vec",
     ]);
+  });
+
+  it("keeps @tobilu/qmd value imports lazy so the extension loads without it", () => {
+    // youke fork invariant: qmd-store.ts is the only module allowed to touch
+    // @tobilu/qmd, and it must not import values at module top level — the
+    // dynamic import inside openQmdIndexStore() is the only value edge.
+    const storeSrc = readFile(join(rootDir, "extensions/llm-wiki/lib/qmd-store.ts"));
+    expect(/^import\s*\{[^}]*\}\s*from\s*"@tobilu\/qmd"/m.test(storeSrc)).toBe(false);
+    expect(storeSrc).toContain('await import("@tobilu/qmd")');
+    // No production module may have a top-level value import of the SDK.
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (["node_modules", "dist", "coverage"].includes(entry.name)) continue;
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (entry.isFile() && entry.name.endsWith(".ts")) {
+          const src = readFile(p);
+          const withoutTypes = src.replace(/^import\s+type\s[^;]*;/gm, "");
+          if (/^import[\s{][^;]*from\s*"@tobilu\/qmd"/m.test(withoutTypes)) offenders.push(p);
+        }
+      }
+    };
+    walk(join(rootDir, "extensions"));
+    walk(join(rootDir, "mcp"));
+    expect(offenders).toEqual([]);
   });
 
   // oh-my-pi reads `package.json#omp` first and only falls back to `#pi`

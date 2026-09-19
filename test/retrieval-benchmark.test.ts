@@ -60,8 +60,13 @@ function currentPackageContract(): { node: string; qmd: string } {
   const pkg = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8")) as {
     engines: { node: string };
     dependencies: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
   };
-  return { node: pkg.engines.node, qmd: pkg.dependencies["@tobilu/qmd"] };
+  // youke fork: qmd lives in optionalDependencies — track the pin either way.
+  return {
+    node: pkg.engines.node,
+    qmd: pkg.dependencies["@tobilu/qmd"] ?? pkg.optionalDependencies?.["@tobilu/qmd"],
+  };
 }
 
 describe("current heuristic retrieval benchmark", () => {

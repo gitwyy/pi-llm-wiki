@@ -1,12 +1,14 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Runtime } from "../extensions/llm-wiki/lib/runtime.js";
 import { runSubAgent } from "../extensions/llm-wiki/lib/subagent.js";
 import { loadTaskConfig } from "../extensions/llm-wiki/lib/task-config.js";
+import { writeJson } from "../extensions/llm-wiki/lib/utils.js";
 
 // ── helpers ───────────────────────────────────────────────
 function deferred<T = void>() {
@@ -279,6 +281,74 @@ describe("Runtime.launchTask", () => {
     }, 5);
     await rt.awaitAll();
     expect(rt.pendingCount).toBe(0);
+  });
+});
+
+// ── Runtime.report durability (youke fork patch) ──────────
+describe("Runtime.report durability (youke fork)", () => {
+  const root = join(import.meta.dirname, "..", "tmp", `report-durability-${Date.now()}`);
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it("persists every report to meta/background-reports.md even without a session", () => {
+    const rt = new Runtime();
+    rt.ensureConfig(root);
+    rt.report("测试报告 summary");
+    const file = join(root, ".llm-wiki", "meta", "background-reports.md");
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, "utf8")).toContain("测试报告 summary");
+  });
+
+  it("falls back to a ui notify when nextTurn delivery throws", () => {
+    const rt = new Runtime();
+    rt.ensureConfig(root);
+    rt.pi = {
+      sendMessage: () => {
+        throw new Error("stale session");
+      },
+    } as unknown as ExtensionAPI;
+    const { calls, ui } = makeNotifier();
+    rt.report("s", { ui });
+    expect(calls.some((c) => /background-reports\.md/.test(c.message))).toBe(true);
+    const file = join(root, ".llm-wiki", "meta", "background-reports.md");
+    expect(readFileSync(file, "utf8")).toContain("s");
+  });
+
+  it("writeJson creates missing parent directories", () => {
+    const file = join(root, ".llm-wiki", "meta", "nested", "state.json");
+    writeJson(file, { ok: true });
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ ok: true });
+  });
+
+  it("duplicate launch notifies instead of dropping silently", async () => {
+    const rt = new Runtime();
+    const d = deferred();
+    const { calls, ui } = makeNotifier();
+    const p1 = rt.launchTask({ hasUI: true, ui }, "dup-visible", async () => {
+      await d.promise;
+    });
+    const p2 = rt.launchTask({ hasUI: true, ui }, "dup-visible", async () => {});
+    expect(p2).toBe(p1);
+    expect(calls.some((c) => /已在运行/.test(c.message))).toBe(true);
+    d.resolve();
+    await p1;
+  });
+
+  it("launchReported delivers the report even when the toast throws (stale UI)", async () => {
+    const rt = new Runtime();
+    rt.ensureConfig(root);
+    const sent: unknown[] = [];
+    rt.pi = {
+      sendMessage: (m: unknown) => sent.push(m),
+    } as unknown as ExtensionAPI;
+    const throwingUi = {
+      notify: () => {
+        throw new Error("stale ui");
+      },
+    };
+    await rt.launchReported({ hasUI: true, ui: throwingUi }, "lr", async () => "done-summary");
+    expect(sent).toHaveLength(1);
+    const file = join(root, ".llm-wiki", "meta", "background-reports.md");
+    expect(readFileSync(file, "utf8")).toContain("done-summary");
   });
 });
 

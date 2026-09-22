@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import { readFile, rootDir } from "./helpers.js";
 
 function readProductionFiles(directory: string): string[] {
@@ -152,6 +153,23 @@ describe("package structure", () => {
       expect(content).toContain("argument-hint:");
       expect(content).toContain("section: LLM Wiki");
       expect(content).toContain("topLevelCli: true");
+    }
+  });
+
+  it("parses every prompt frontmatter as valid YAML with a non-empty description", () => {
+    // Regression: pi's prompt loader YAML-parses these blocks; an unquoted
+    // colon+space in a scalar (e.g. "cycle: discover") makes the whole file
+    // fail to load. Substring checks above cannot catch that.
+    const promptDir = join(rootDir, "prompts");
+    for (const name of readdirSync(promptDir)) {
+      if (!name.endsWith(".md")) continue;
+      const content = readFile(join(promptDir, name));
+      const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+      expect(match, `${name} should start with a YAML frontmatter block`).not.toBeNull();
+      const doc = parse(match![1]) as Record<string, unknown>;
+      expect(doc, `${name} frontmatter should parse as YAML`).toBeTypeOf("object");
+      expect(typeof doc.description, `${name} should have a description`).toBe("string");
+      expect((doc.description as string).length).toBeGreaterThan(0);
     }
   });
 
